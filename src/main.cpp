@@ -6,44 +6,24 @@
 #include <string.h>
 #include <limits>
 #include <random>
+#include <iomanip>
 #include "Float80.h"
-
-#define exponent(x) (x << 1) >> 1
-#define sign(x) x >> 15
 
 using namespace std;
 
-long double powEx(int input)
+void printDoubleAsBites(uint64_t input);
+
+uint16_t sign(uint16_t input)
 {
-    int ex = input;
-    long double output = 1;
-
-    if (input > 0)
-    {
-        while (ex > 0)
-        {
-            output *= 2;
-            ex--;
-        }
-
-        return output;
-    }
-    else if (input <= 0)
-    {
-        while (ex < 0)
-        {
-            output *= 2;
-            ex++;
-        }
-
-        output = 1/output;
-
-        return output;
-    }
-    else return 0;
+    return input >>= 15;
 }
 
-unsigned char reverseBits(unsigned char input)
+uint16_t exponent(uint16_t input)
+{
+    return (input <<= 1) >>= 1;
+}
+
+unsigned char revertBites(unsigned char input)
 {
     unsigned char output = input;
 
@@ -57,11 +37,40 @@ unsigned char reverseBits(unsigned char input)
     return output;
 }
 
+uint64_t revertMantissa(uint64_t input)
+{
+    uint64_t output = 0;
+
+    for (int i = 0; i < 64; i++)
+    {
+        if (input % 2 != 0)
+        {
+            output = output ^ 1;
+        }
+
+        if (i != 63)
+        {
+            output <<= 1;
+            input >>= 1;
+        }
+    }
+
+    return output;
+}
+
 void add(Float80* a, Float80* b, Float80* result)
 {
-    uint64_t result_mantissa;
-    uint16_t result_exponent;
     uint16_t result_sign;
+    uint16_t result_exponent;
+    uint64_t result_mantissa;
+
+    uint16_t a_exponent = exponent(a->signAndExponent);
+    uint16_t b_exponent = exponent(b->signAndExponent);
+    uint64_t a_mantissa = revertMantissa(a->mantissa) >> 1;
+    uint64_t b_mantissa = revertMantissa(b->mantissa) >> 1;
+
+    printDoubleAsBites(a_mantissa);
+    printDoubleAsBites(b_mantissa);
 
     int16_t different_sign = sign(a->signAndExponent) ^ sign(b->signAndExponent);
 
@@ -108,23 +117,37 @@ void add(Float80* a, Float80* b, Float80* result)
         return;
     }
 
-    uint16_t exp_difference = 0;
+    //Suma takich liczb
+    if ((a_exponent == b_exponent) && (a_mantissa == b_mantissa))
+    {
+        if (!different_sign)
+        {
+            uint16_t signAndExponent = (sign(a->signAndExponent) << 15) | (a_exponent + 1);
 
-    if (different_sign)
-    {
-        exp_difference = exponent(b->signAndExponent) + exponent(a->signAndExponent);
-    }
-    else
-    {
-        if (exponent(a->signAndExponent) > exponent(b->signAndExponent))
-        {
-            exp_difference = exponent(a->signAndExponent) - exponent(b->signAndExponent);
+            result->signAndExponent = signAndExponent;
+            result->mantissa = a->mantissa;
+            return;
         }
-        else if (exponent(a->signAndExponent) < exponent(b->signAndExponent))
+        else
         {
-            exp_difference = exponent(b->signAndExponent) - exponent(a->signAndExponent);
+            result->signAndExponent = 0x0000;
+            result->mantissa = 0;
+            return;
         }
     }
+
+    int exp_difference;
+
+//    if (different_sign)
+//    {
+//        exp_difference = exponent(b->signAndExponent) + exponent(a->signAndExponent);
+//    }
+//    else
+//    {
+//        exp_difference = abs(a_exponent - b_exponent);
+//    }
+
+exp_difference = abs(a_exponent - b_exponent);
 
     bool x_bigger_abs;
     if      (exponent(a->signAndExponent) > exponent(b->signAndExponent)) x_bigger_abs = true;
@@ -137,48 +160,74 @@ void add(Float80* a, Float80* b, Float80* result)
         result_sign = sign(a->signAndExponent);
 
         if (x_bigger_abs) {
-            result_mantissa = (a->mantissa << 1) + (b->mantissa << 1) >> exp_difference;
-            result_exponent = exponent(a->signAndExponent);
+            result_mantissa = a_mantissa + (b_mantissa >> exp_difference);
+            result_exponent = a_exponent;
         }
-        else {
-            result_mantissa = (b->mantissa << 1) + ((a->mantissa << 1) >> exp_difference);
-            result_exponent = exponent(b->signAndExponent);
+        else
+        {
+            result_mantissa = b_mantissa + (a_mantissa >> exp_difference);
+            result_exponent = b_exponent;
         }
-        if (result_mantissa << 63) result_mantissa = (result_mantissa >> 1) + 1;
-        else result_mantissa = (result_mantissa >> 1);
+
+        if ((result_mantissa >> 63) == 1)
+        {
+            result_exponent = result_exponent + 1;
+        }
+        else
+        {
+            result_mantissa = result_mantissa << 1;
+        }
+
+        printDoubleAsBites(result_mantissa);
+        result_mantissa = revertMantissa(result_mantissa);
+
     }
     else
     {
         if (x_bigger_abs) {
             result_sign = sign(a->signAndExponent);
-            result_exponent = exponent(a->signAndExponent);
-
-            result_mantissa = (a->mantissa << 1) - ((b->mantissa << 1) >> exp_difference );
+            result_mantissa = a_mantissa - (b_mantissa >> exp_difference);
+            result_exponent = a_exponent;
         }
         else {
             result_sign = sign(b->signAndExponent);
-            result_exponent = exponent(b->signAndExponent);
-
-            result_mantissa = (b->mantissa << 1) - ((a->mantissa << 1) >> exp_difference);
+            result_mantissa = b_mantissa - (a_mantissa >> exp_difference);
+            result_exponent = b_exponent;
         }
 
-        if (result_mantissa << 63)  result_mantissa = ((result_mantissa >> 1) + 1);
-        else result_mantissa = (result_mantissa >> 1);
+        if ((result_mantissa >> 63) == 1)
+        {
+            result_exponent = result_exponent + 1;
+        }
+        else
+        {
+            result_mantissa = result_mantissa << 1;
+        }
+
+        printDoubleAsBites(result_mantissa);
+        result_mantissa = revertMantissa(result_mantissa);
     }
 
-    uint16_t signa = sign(a->signAndExponent);
-    uint16_t signb = sign(b->signAndExponent);
-    uint16_t expa = exponent(a->signAndExponent);
-    uint16_t expb = exponent(b->signAndExponent);
-
-    cout<<"A: " << signa << " " << expa << " " << a->mantissa << endl;
-    cout<<"B: " << signb << " " << expb << " " << b->mantissa << endl;
-    cout<<"R: " << result_sign << " " << result_exponent << " " << result_mantissa<<endl;
-
-    uint16_t result_signAndExponent = result_sign << 15 | result_exponent;
-
-    result->signAndExponent = result_signAndExponent;
+    result->signAndExponent = (result_sign << 15 | result_exponent);
     result->mantissa = result_mantissa;
+}
+
+int checkLastOneBit(uint64_t input)
+{
+    uint64_t number = input;
+    int output = 0;
+
+    for (int i = 0; i < 64; ++i)
+    {
+        if (number % 2 != 0)
+        {
+            output = i + 1;
+        }
+
+        number >>= 1;
+    }
+
+    return output;
 }
 
 uint16_t createSignAndExponent(long double input)
@@ -231,21 +280,43 @@ uint64_t createMantissa(long double input)
     return output;
 }
 
-void printNumberAsBits(long double input)
+void printNumberAsBites(long double input)
 {
-    cout << input << ": ";
-
     unsigned char arr[sizeof(long double)];
     memcpy(arr, &input, sizeof(input));
 
     for (int i = 0; i != 10; ++i)
     {
-        unsigned char c = reverseBits(arr[9 - i]);
+        unsigned char c = revertBites(arr[9 - i]);
 
         for (int j = 0; j < 8; j++)
         {
-                cout << c % 2;
-                c >>= 1;
+            cout << c % 2;
+            c >>= 1;
+
+            if (((i * 8) + j) == 0 | ((i * 8) + j) == 15)
+            {
+                cout << " ";
+            }
+        }
+    }
+
+    cout << endl;
+}
+
+void printDoubleAsBites(uint64_t input)
+{
+    unsigned char arr[sizeof(uint64_t)];
+    memcpy(arr, &input, sizeof(input));
+
+    for (int i = 0; i != 8; ++i)
+    {
+        unsigned char c = revertBites(arr[7 - i]);
+
+        for (int j = 0; j < 8; j++)
+        {
+            cout << c % 2;
+            c >>= 1;
         }
     }
 
@@ -254,18 +325,41 @@ void printNumberAsBits(long double input)
 
 long double convertToFloat(Float80* input)
 {
-    uint16_t sign = sign(input->signAndExponent);
-    uint16_t exponent = exponent(input->signAndExponent);
+    uint16_t _sign = sign(input->signAndExponent);
+    uint16_t _exponent = exponent(input->signAndExponent);
     uint64_t mantissa = input->mantissa;
+    long double man = 0;
+    long double d = 1;
 
-    int e = exponent - 32767;
+    int e = _exponent - 16383;
 
-    long double pp = powEx(e);
-    long double output = mantissa * pp;
+    for (int i = 0; i < 64; ++i)
+    {
+        if (mantissa % 2 != 0)
+        {
+            man += (1 / pow(2, i));
+        }
 
-    if (sign == 1) output *= -1;
+        mantissa >>= 1;
+    }
+
+    long double pp = pow(2, e);
+    long double output = man * pp;
+
+    if (_sign == 1) output = -(output);
 
     return output;
+}
+
+void printNumber(long double input, bool endLine = false)
+{
+    cout.precision(15);
+    cout << input;
+
+    if (endLine)
+    {
+        cout << endl;
+    }
 }
 
 int main()
@@ -282,8 +376,8 @@ int main()
     long double fNumber2;
     long double fResult;
 
-    char input1[] = "12";
-    char input2[] = "1";
+    char input1[] = "22.5";
+    char input2[] = "-2501";
 
     sscanf(input1, "%Lf", &fNumber1);
     sscanf(input2, "%Lf", &fNumber2);
@@ -294,17 +388,24 @@ int main()
     number2.signAndExponent = createSignAndExponent(fNumber2);
     number2.mantissa = createMantissa(fNumber2);
 
-    printNumberAsBits(fNumber1);
-    printNumberAsBits(fNumber2);
+    long double testResult = fNumber1 + fNumber2;
+    printNumber(fNumber1);
+    cout << " + ";
+    printNumber(fNumber2);
+    cout << " = ";
+    printNumber(testResult, true);
 
-    long double sum = *(long double*) &fNumber1 + *(long double*) &fNumber2;
-    cout << *(long double*) &fNumber1 << " + " << *(long double*) &fNumber2 << " = " << sum << endl;
+    printNumberAsBites(fNumber1);
+    printNumberAsBites(fNumber2);
 
+    cout << endl;
+    cout << "Mantysy:" << endl;
     add(number1_p, number2_p, result_p);
     fResult = convertToFloat(result_p);
+    cout << endl;
 
-    //cout << "Wynik: " << *(long double*) &fResult << endl;
-
-    printNumberAsBits(fResult);
+    cout << "Wynik: ";
+    printNumber(fResult, true);
+    printNumberAsBites(fResult);
 }
 
