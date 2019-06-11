@@ -105,27 +105,31 @@ void add(float80* a, float80* b, float80* result)
     {
         if (different_sign)
         {
-            result->signAndExponent = 0x7FFF;
-            result->mantissa = a->mantissa + 1;
+            result->parts.sign = a->parts.sign;
+            result->parts.exponent = 0x7FFF;
+            result->parts.mantissa = a_mantissa + 1;
             return;
         }
         else
         {
-            result->signAndExponent = a->signAndExponent;
-            result->mantissa = a->mantissa;
+            result->parts.sign = a->parts.sign;
+            result->parts.exponent = a_exponent;
+            result->parts.mantissa = a_mantissa;
             return;
         }
     }
-    else if (!(exponent(a->signAndExponent) ^ 0x7FFF))
+    else if (!(a_exponent ^ 0x7FFF))
     {
-        result->signAndExponent = a->signAndExponent;
-        result->mantissa = a->mantissa;
+        result->parts.sign = a->parts.sign;
+        result->parts.exponent = a_exponent;
+        result->parts.mantissa = a_mantissa;
         return;
     }
-    else if (!(exponent(b->signAndExponent) ^ 0x7FFF))
+    else if (!(b_exponent ^ 0x7FFF))
     {
-        result->signAndExponent = b->signAndExponent;
-        result->mantissa = b->mantissa;
+        result->parts.sign = b->parts.sign;
+        result->parts.exponent = b_exponent;
+        result->parts.mantissa = b_mantissa;
         return;
     }
 
@@ -136,7 +140,7 @@ void add(float80* a, float80* b, float80* result)
         {
             result->parts.sign = a->parts.sign;
             result->parts.exponent = a_exponent + 1;
-            result->parts.mantissa = a_mantissa;
+            result->parts.mantissa = a_mantissa << 1;
             return;
         }
         else
@@ -214,12 +218,9 @@ void printNumberAsBites(float80 input)
 
     cout << input.parts.sign << " ";
 
-    uint16_t exponent = input.parts.exponent;
-
-    for (int i = 0; i != 16; i++)
+    for (int i = 14; i >= 0; i--)
     {
-        cout << exponent % 2;
-        exponent >>= 1;
+        cout << ((input.parts.exponent >> i) & 1);
     }
 
     cout << " ";
@@ -238,8 +239,8 @@ int main()
     long double ldNumber2;
     long double ldResult;
 
-    char input1[] = "18.457147";
-    char input2[] = "-60.05001";
+    char input1[] = "25165122.1451";
+    char input2[] = "-1515001.745";
 
     sscanf(input1, "%Lf", &ldNumber1);
     sscanf(input2, "%Lf", &ldNumber2);
@@ -252,7 +253,7 @@ int main()
     float80* number2_p = &number2;
     float80* result_p = &result;
 
-    //cout.precision(15);
+    //cout.precision(3);
 
     cout << ldNumber1 << " + " << ldNumber2 << " = " << (ldNumber1 + ldNumber2) << endl;
     cout << endl;
@@ -269,4 +270,3 @@ int main()
     cout << endl;
     cout << "Wynik: " << result.number << endl;
 }
-
