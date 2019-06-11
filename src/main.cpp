@@ -101,33 +101,33 @@ void add(float80* a, float80* b, float80* result)
     }
 
     //Nieskoczonosc
-//    if (!(a_exponent ^ 0x7FFF) && !(b_exponent ^ 0x7FFF))
-//    {
-//        if (different_sign)
-//        {
-//            result->signAndExponent = 0x7FFF;
-//            result->mantissa = a->mantissa + 1;
-//            return;
-//        }
-//        else
-//        {
-//            result->signAndExponent = a->signAndExponent;
-//            result->mantissa = a->mantissa;
-//            return;
-//        }
-//    }
-//    else if (!(exponent(a->signAndExponent) ^ 0x7FFF))
-//    {
-//        result->signAndExponent = a->signAndExponent;
-//        result->mantissa = a->mantissa;
-//        return;
-//    }
-//    else if (!(exponent(b->signAndExponent) ^ 0x7FFF))
-//    {
-//        result->signAndExponent = b->signAndExponent;
-//        result->mantissa = b->mantissa;
-//        return;
-//    }
+    if (!(a_exponent ^ 0x7FFF) && !(b_exponent ^ 0x7FFF))
+    {
+        if (different_sign)
+        {
+            result->signAndExponent = 0x7FFF;
+            result->mantissa = a->mantissa + 1;
+            return;
+        }
+        else
+        {
+            result->signAndExponent = a->signAndExponent;
+            result->mantissa = a->mantissa;
+            return;
+        }
+    }
+    else if (!(exponent(a->signAndExponent) ^ 0x7FFF))
+    {
+        result->signAndExponent = a->signAndExponent;
+        result->mantissa = a->mantissa;
+        return;
+    }
+    else if (!(exponent(b->signAndExponent) ^ 0x7FFF))
+    {
+        result->signAndExponent = b->signAndExponent;
+        result->mantissa = b->mantissa;
+        return;
+    }
 
     //Suma takich liczb
     if ((a_exponent == b_exponent) && (a_mantissa == b_mantissa))
