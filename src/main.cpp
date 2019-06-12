@@ -7,7 +7,7 @@
 #include <limits>
 #include <random>
 #include <iomanip>
-#include "Float80.h"
+#include <gtest/gtest.h>
 
 using namespace std;
 
@@ -26,52 +26,7 @@ typedef union
 }
 float80;
 
-uint16_t sign(uint16_t input)
-{
-    return input >>= 15;
-}
-
-uint16_t exponent(uint16_t input)
-{
-    return (input <<= 1) >>= 1;
-}
-
-unsigned char revertBites(unsigned char input)
-{
-    unsigned char output = input;
-
-    for(int i = sizeof(input) * 7; i ; --i)
-    {
-        output <<= 1;
-        input >>= 1;
-        output |= input & 1;
-    }
-
-    return output;
-}
-
-uint64_t revertMantissa(uint64_t input)
-{
-    uint64_t output = 0;
-
-    for (int i = 0; i < 64; i++)
-    {
-        if (input % 2 != 0)
-        {
-            output = output ^ 1;
-        }
-
-        if (i != 63)
-        {
-            output <<= 1;
-            input >>= 1;
-        }
-    }
-
-    return output;
-}
-
-void add(float80* a, float80* b, float80* result)
+void addOrSubtract(float80* a, float80* b, float80* result)
 {
     uint16_t result_sign;
     uint16_t result_exponent;
@@ -154,17 +109,31 @@ void add(float80* a, float80* b, float80* result)
 
     int exp_difference = abs(a_exponent - b_exponent);
 
-    bool x_bigger_abs;
-    if      (a_exponent > b_exponent) x_bigger_abs = true;
-    else if (a_exponent < b_exponent) x_bigger_abs = false;
-    else if (a_mantissa > b_mantissa) x_bigger_abs = true;
-    else                                x_bigger_abs = false;
+    bool x_bigger_abs = false;
+
+    if (a_exponent > b_exponent)
+    {
+        x_bigger_abs = true;
+    }
+    else if (a_exponent < b_exponent)
+    {
+        x_bigger_abs = false;
+    }
+    else if (a_mantissa > b_mantissa)
+    {
+        x_bigger_abs = true;
+    }
+    else
+    {
+        x_bigger_abs = false;
+    }
 
     if (!different_sign)
     {
         result_sign = a->parts.sign;
 
-        if (x_bigger_abs) {
+        if (x_bigger_abs)
+        {
             result_mantissa = a_mantissa + (b_mantissa >> exp_difference);
             result_exponent = a_exponent;
         }
@@ -185,12 +154,14 @@ void add(float80* a, float80* b, float80* result)
     }
     else
     {
-        if (x_bigger_abs) {
+        if (x_bigger_abs)
+        {
             result_sign = a->parts.sign;
             result_mantissa = a_mantissa - (b_mantissa >> exp_difference);
             result_exponent = a_exponent;
         }
-        else {
+        else
+        {
             result_sign = b->parts.sign;
             result_mantissa = b_mantissa - (a_mantissa >> exp_difference);
             result_exponent = b_exponent;
@@ -209,6 +180,21 @@ void add(float80* a, float80* b, float80* result)
     result->parts.sign = result_sign;
     result->parts.exponent = result_exponent;
     result->parts.mantissa = result_mantissa;
+}
+
+long double calculate(long double a, long double b)
+{
+    float80 number1 = { .number = a };
+    float80 number2 = { .number = b };
+    float80 result = { .number = 0 };
+
+    float80* number1_p = &number1;
+    float80* number2_p = &number2;
+    float80* result_p = &result;
+
+    addOrSubtract(number1_p, number2_p, result_p);
+
+    return result.number;
 }
 
 void printNumberAsBites(float80 input)
@@ -233,40 +219,131 @@ void printNumberAsBites(float80 input)
     cout << endl;
 }
 
-int main()
+void fileMode()
 {
     long double ldNumber1;
     long double ldNumber2;
     long double ldResult;
 
-    char input1[] = "25165122.1451";
-    char input2[] = "-1515001.745";
-
-    sscanf(input1, "%Lf", &ldNumber1);
-    sscanf(input2, "%Lf", &ldNumber2);
-
-    float80 number1 = { .number = ldNumber1 };
-    float80 number2 = { .number = ldNumber2 };
+    float80 number1 = { .number = 0 };
+    float80 number2 = { .number = 0 };
     float80 result = { .number = 0 };
 
     float80* number1_p = &number1;
     float80* number2_p = &number2;
     float80* result_p = &result;
 
-    //cout.precision(3);
+    cout.precision(6);
 
-    cout << ldNumber1 << " + " << ldNumber2 << " = " << (ldNumber1 + ldNumber2) << endl;
-    cout << endl;
+    std::ifstream file;
+    file.open("data.txt");
 
-    cout << number1.parts.sign << " " << number1.parts.exponent << " " << number1.parts.mantissa << endl;
-    printNumberAsBites(number1);
-    cout << number2.parts.sign << " " << number2.parts.exponent << " " << number2.parts.mantissa << endl;
-    printNumberAsBites(number2);
+    if (!file.is_open())
+    {
+        cout << "Nie mozna otworzyc pliku :(" << endl;
+        return;
+    }
 
-    add(number1_p, number2_p, result_p);
+    string line;
 
-    cout << result.parts.sign << " " << result.parts.exponent << " " << result.parts.mantissa << endl;
-    printNumberAsBites(result);
-    cout << endl;
-    cout << "Wynik: " << result.number << endl;
+    while (getline(file, line))
+    {
+        istringstream iss(line);
+
+        iss >> std::dec >> ldNumber1;
+        iss >> std::dec >> ldNumber2;
+
+        iss.clear();
+
+        number1 = { .number = ldNumber1 };
+        number2 = { .number = ldNumber2 };
+
+        ldResult = ldNumber1 + ldNumber2;
+        cout << ldNumber1 << " + " << ldNumber2 << " = " << ldResult << "   ";
+
+        addOrSubtract(number1_p, number2_p, result_p);
+
+        if (result.number == ldResult)
+        {
+            cout << "OK" << endl;
+        }
+        else
+        {
+            cout << endl;
+        }
+
+        //printNumberAsBites(result);
+    }
+
+    file.close();
 }
+
+int main(int argc, char **argv)
+{
+    char option;
+    do
+    {
+        cout << "MENU" << endl;
+        cout << endl;
+        cout << "1 - tryb testow" << endl;
+        cout << "2 - tryb pliku" << endl;
+        cout << "0 - wyjscie" << endl;
+
+        cin >> option;
+        //option = getchar();
+        cout << endl;
+
+        switch(option)
+        {
+            case '1':
+                testing::InitGoogleTest(&argc, argv);
+                return RUN_ALL_TESTS();
+                break;
+
+            case '2':
+                fileMode();
+                break;
+        }
+    }
+    while(option != '0');
+}
+
+TEST(LongDoubleAddTest, add)
+{
+    ASSERT_DOUBLE_EQ(6, calculate(2, 4));
+    ASSERT_DOUBLE_EQ(31, calculate(17, 14));
+    ASSERT_DOUBLE_EQ(120454.25, calculate(120086, 368.25));
+    ASSERT_DOUBLE_EQ(547.3694, calculate(478.368, 69.0014));
+    ASSERT_DOUBLE_EQ(37.0587, calculate(0.258, 36.8007));
+    ASSERT_DOUBLE_EQ(2.41406, calculate(0.04805, 2.36601));
+    ASSERT_DOUBLE_EQ(1432.239042, calculate(489.783242, 942.4558));
+    ASSERT_DOUBLE_EQ(1123941.55163, calculate(1100863.001, 23078.55063));
+    ASSERT_DOUBLE_EQ(3, calculate(1.153, 1.847));
+    ASSERT_DOUBLE_EQ(51432.8765, calculate(42687.54253, 8745.33397));
+    ASSERT_DOUBLE_EQ(200, calculate(100, 100));
+    ASSERT_DOUBLE_EQ(687522.425, calculate(5462.2465, 682060.1785));
+    ASSERT_DOUBLE_EQ(36.902416635, calculate(25.900017625, 11.00239901));
+    ASSERT_DOUBLE_EQ(0.120015009, calculate(0.020009, 0.100006009));
+    ASSERT_DOUBLE_EQ(142532474.9707104, calculate(99978309.7140552, 42554165.2566552));
+}
+
+TEST(LongDoubleSubtractTest, sub)
+{
+    ASSERT_DOUBLE_EQ(423, calculate(-9, 432));
+    ASSERT_DOUBLE_EQ(50, calculate(60, -10));
+    ASSERT_DOUBLE_EQ(0, calculate(1900025.14, -1900025.14));
+    ASSERT_DOUBLE_EQ(-66944.71, calculate(-34799.48, -32145.23));
+    ASSERT_DOUBLE_EQ(-450, calculate(-150, -300));
+    ASSERT_DOUBLE_EQ(-37.0587, calculate(-0.258, -36.8007));
+    ASSERT_DOUBLE_EQ(-2.41406, calculate(-0.04805, -2.36601));
+    ASSERT_DOUBLE_EQ(-1432.239042, calculate(-489.783242, -942.4558));
+    ASSERT_DOUBLE_EQ(-0.00045, calculate(-0.00041, -0.00004));
+    ASSERT_DOUBLE_EQ(-54254.55, calculate(-5426.24, -48828.31));
+    ASSERT_DOUBLE_EQ(-200, calculate(-100, -100));
+    ASSERT_DOUBLE_EQ(-687522.425, calculate(-5462.2465, -682060.1785));
+    ASSERT_DOUBLE_EQ(-36.902416635, calculate(-25.900017625, -11.00239901));
+    ASSERT_DOUBLE_EQ(-0.120015009, calculate(-0.020009, -0.100006009));
+    ASSERT_DOUBLE_EQ(-142532474.9707104, calculate(-99978309.7140552, -42554165.2566552));
+}
+
+
