@@ -1,17 +1,9 @@
 #include <fstream>
-#include <iostream>
-#include <sstream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <limits>
-#include <random>
-#include <iomanip>
+#include <chrono>
+#include <stdint.h>
 #include <gtest/gtest.h>
 
 using namespace std;
-
-void printDoubleAsBites(uint64_t input);
 
 typedef union
 {
@@ -26,15 +18,36 @@ typedef union
 }
 float80;
 
-void addOrSubtract(float80* a, float80* b, float80* result)
+class Timer {
+public:
+    std::chrono::high_resolution_clock::time_point startCounting;
+    std::chrono::high_resolution_clock::time_point stopCounting;
+
+    void Start()
+    {
+		startCounting = std::chrono::high_resolution_clock::now();
+	}
+
+    void Stop()
+    {
+        stopCounting = std::chrono::high_resolution_clock::now();
+	}
+
+    long timeInMS()
+    {
+    	return std::chrono::duration_cast<std::chrono::microseconds>(Timer::stopCounting - Timer::startCounting).count();
+	}
+};
+
+void addOrSubtract(float80* a, float80* b, float80* result) // parametry wejsciowe jako unie
 {
-    uint16_t result_sign;
+    uint16_t result_sign; // na tych zmiennych robione są obliczenia
     uint16_t result_exponent;
     uint64_t result_mantissa;
 
     uint16_t a_exponent = a->parts.exponent;
     uint16_t b_exponent = b->parts.exponent;
-    uint64_t a_mantissa = a->parts.mantissa >> 1;
+    uint64_t a_mantissa = a->parts.mantissa >> 1; // mantysy sa przesuwane w prawo, aby zrobic miejsce na nadmiar
     uint64_t b_mantissa = b->parts.mantissa >> 1;
 
     int16_t different_sign = a->parts.sign ^ b->parts.sign;
@@ -53,6 +66,7 @@ void addOrSubtract(float80* a, float80* b, float80* result)
         result->parts.sign = b->parts.sign;
         result->parts.exponent = b_exponent;
         result->parts.mantissa = b_mantissa;
+        return;
     }
 
     //Nieskoczonosc
@@ -88,7 +102,7 @@ void addOrSubtract(float80* a, float80* b, float80* result)
         return;
     }
 
-    //Suma takich liczb
+    //Suma takich samych liczb
     if ((a_exponent == b_exponent) && (a_mantissa == b_mantissa))
     {
         if (!different_sign)
@@ -107,6 +121,7 @@ void addOrSubtract(float80* a, float80* b, float80* result)
         }
     }
 
+    // Różnica eksponentów, aby później odpowiednio przesunąć mantysy
     int exp_difference = abs(a_exponent - b_exponent);
 
     bool x_bigger_abs = false;
@@ -143,13 +158,17 @@ void addOrSubtract(float80* a, float80* b, float80* result)
             result_exponent = b_exponent;
         }
 
+        //Sprawdzenie czy najstarszy bit jest 1 - czyli czy wystapilo przepelnienie
         if ((result_mantissa >> 63) == 1)
         {
             result_exponent = result_exponent + 1;
         }
         else
         {
-            result_mantissa = result_mantissa << 1;
+            while ((result_mantissa >> 63) == 0)
+            {
+                result_mantissa = result_mantissa << 1;
+            }
         }
     }
     else
@@ -173,11 +192,59 @@ void addOrSubtract(float80* a, float80* b, float80* result)
         }
         else
         {
-            result_mantissa = result_mantissa << 1;
+            while ((result_mantissa >> 63) == 0)
+            {
+                result_mantissa = result_mantissa << 1;
+            }
         }
     }
 
     result->parts.sign = result_sign;
+    result->parts.exponent = result_exponent;
+    result->parts.mantissa = result_mantissa;
+}
+
+void multiply(float80* a, float80* b, float80* result)
+{
+    uint16_t result_sign; // na tych zmiennych robione są obliczenia
+    uint16_t result_exponent;
+    uint64_t result_mantissa;
+
+    uint16_t a_exponent = a->parts.exponent - 16383;
+    uint16_t b_exponent = b->parts.exponent - 16383;
+    uint64_t a_mantissa = a->parts.mantissa >> 1;
+    uint64_t b_mantissa = b->parts.mantissa >> 1;
+
+    int16_t different_sign = a->parts.sign ^ b->parts.sign;
+
+    result_exponent = (a_exponent + b_exponent) + 16383;
+
+    if (different_sign)
+    {
+        result->parts.sign = 1;
+    }
+    else
+    {
+        result->parts.sign = 0;
+    }
+
+    __uint128_t r_mantissa = (__uint128_t)a_mantissa * (__uint128_t)b_mantissa;
+
+    while ((r_mantissa >> 127) == 0)
+    {
+        r_mantissa = r_mantissa << 1;
+    }
+
+    result_mantissa = (uint64_t)(r_mantissa >> 64);
+
+//    int i = 1;
+//
+    if ((result_mantissa >> 63) == 0)
+    {
+        result_mantissa = (uint64_t)(r_mantissa >> 63);
+        result_exponent = result_exponent - 1;
+    }
+
     result->parts.exponent = result_exponent;
     result->parts.mantissa = result_mantissa;
 }
@@ -199,9 +266,6 @@ long double calculate(long double a, long double b)
 
 void printNumberAsBites(float80 input)
 {
-    unsigned char arr[sizeof(long double)];
-    memcpy(arr, &input, sizeof(input));
-
     cout << input.parts.sign << " ";
 
     for (int i = 14; i >= 0; i--)
@@ -233,7 +297,7 @@ void fileMode()
     float80* number2_p = &number2;
     float80* result_p = &result;
 
-    cout.precision(6);
+    cout.precision(20);
 
     std::ifstream file;
     file.open("data.txt");
@@ -258,21 +322,33 @@ void fileMode()
         number1 = { .number = ldNumber1 };
         number2 = { .number = ldNumber2 };
 
-        ldResult = ldNumber1 + ldNumber2;
-        cout << ldNumber1 << " + " << ldNumber2 << " = " << ldResult << "   ";
+        Timer timer1;
+        timer1.Start();
+        ldResult = ldNumber1 * ldNumber2;
+        timer1.Stop();
+        cout << ldNumber1 << " * " << ldNumber2 << " = " << ldResult << "   ";
 
-        addOrSubtract(number1_p, number2_p, result_p);
+        Timer timer2;
+        timer2.Start();
+        //addOrSubtract(number1_p, number2_p, result_p);
+        multiply(number1_p, number2_p, result_p);
+        timer2.Stop();
 
         if (result.number == ldResult)
         {
-            cout << "OK" << endl;
+            cout << "OK";
         }
         else
         {
-            cout << endl;
+            cout << result.number;
         }
 
-        //printNumberAsBites(result);
+        cout << endl;
+        //cout << "   " << (long)timer1.timeInMS() << " " << (long)timer2.timeInMS() << endl;
+
+//        printNumberAsBites(number1);
+//        printNumberAsBites(number2);
+//        printNumberAsBites(result);
     }
 
     file.close();
@@ -280,9 +356,12 @@ void fileMode()
 
 int main(int argc, char **argv)
 {
+    cout << sizeof(long double) << endl;
+
     char option;
     do
     {
+        cout << endl;
         cout << "MENU" << endl;
         cout << endl;
         cout << "1 - tryb testow" << endl;
@@ -297,7 +376,7 @@ int main(int argc, char **argv)
         {
             case '1':
                 testing::InitGoogleTest(&argc, argv);
-                return RUN_ALL_TESTS();
+                RUN_ALL_TESTS();
                 break;
 
             case '2':
@@ -345,5 +424,4 @@ TEST(LongDoubleSubtractTest, sub)
     ASSERT_DOUBLE_EQ(-0.120015009, calculate(-0.020009, -0.100006009));
     ASSERT_DOUBLE_EQ(-142532474.9707104, calculate(-99978309.7140552, -42554165.2566552));
 }
-
 
