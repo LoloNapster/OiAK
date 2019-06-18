@@ -69,7 +69,7 @@ void addOrSubtract(float80* a, float80* b, float80* result) // parametry wejscio
         return;
     }
 
-    //Nieskoczonosc
+    //Nieskonczonosc
     if (!(a_exponent ^ 0x7FFF) && !(b_exponent ^ 0x7FFF))
     {
         if (different_sign)
@@ -112,6 +112,7 @@ void addOrSubtract(float80* a, float80* b, float80* result) // parametry wejscio
             result->parts.mantissa = a_mantissa << 1;
             return;
         }
+        //Suma liczb przeciwnych, czyli 0
         else
         {
             result->parts.sign = 0;
@@ -237,8 +238,6 @@ void multiply(float80* a, float80* b, float80* result)
 
     result_mantissa = (uint64_t)(r_mantissa >> 64);
 
-//    int i = 1;
-//
     if ((result_mantissa >> 63) == 0)
     {
         result_mantissa = (uint64_t)(r_mantissa >> 63);
@@ -249,7 +248,8 @@ void multiply(float80* a, float80* b, float80* result)
     result->parts.mantissa = result_mantissa;
 }
 
-long double calculate(long double a, long double b)
+//Funkcja pomocnicza do testów dodawania i odejmowania
+long double calculateAddOrSubtract(long double a, long double b)
 {
     float80 number1 = { .number = a };
     float80 number2 = { .number = b };
@@ -264,6 +264,23 @@ long double calculate(long double a, long double b)
     return result.number;
 }
 
+//Funkcja pomocnicza do testów mnożenia
+long double calculateMultiply(long double a, long double b)
+{
+    float80 number1 = { .number = a };
+    float80 number2 = { .number = b };
+    float80 result = { .number = 0 };
+
+    float80* number1_p = &number1;
+    float80* number2_p = &number2;
+    float80* result_p = &result;
+
+    multiply(number1_p, number2_p, result_p);
+
+    return result.number;
+}
+
+//Funkcja do wyświetlania liczby w postaci bitowej
 void printNumberAsBites(float80 input)
 {
     cout << input.parts.sign << " ";
@@ -283,7 +300,7 @@ void printNumberAsBites(float80 input)
     cout << endl;
 }
 
-void fileMode()
+void fileMode(bool multiplication)
 {
     long double ldNumber1;
     long double ldNumber2;
@@ -297,7 +314,10 @@ void fileMode()
     float80* number2_p = &number2;
     float80* result_p = &result;
 
-    cout.precision(20);
+    Timer timer1;
+    Timer timer2;
+
+    cout.precision(10);
 
     std::ifstream file;
     file.open("data.txt");
@@ -322,17 +342,28 @@ void fileMode()
         number1 = { .number = ldNumber1 };
         number2 = { .number = ldNumber2 };
 
-        Timer timer1;
-        timer1.Start();
-        ldResult = ldNumber1 * ldNumber2;
-        timer1.Stop();
-        cout << ldNumber1 << " * " << ldNumber2 << " = " << ldResult << "   ";
+        if (!multiplication)
+        {
+            timer1.Start();
+            ldResult = ldNumber1 + ldNumber2;
+            timer1.Stop();
+            cout << ldNumber1 << " + " << ldNumber2 << " = " << ldResult << "   ";
 
-        Timer timer2;
-        timer2.Start();
-        //addOrSubtract(number1_p, number2_p, result_p);
-        multiply(number1_p, number2_p, result_p);
-        timer2.Stop();
+            timer2.Start();
+            addOrSubtract(number1_p, number2_p, result_p);
+            timer2.Stop();
+        }
+        else
+        {
+            timer1.Start();
+            ldResult = ldNumber1 * ldNumber2;
+            timer1.Stop();
+            cout << ldNumber1 << " * " << ldNumber2 << " = " << ldResult << "   ";
+
+            timer2.Start();
+            multiply(number1_p, number2_p, result_p);
+            timer2.Stop();
+        }
 
         if (result.number == ldResult)
         {
@@ -343,9 +374,9 @@ void fileMode()
             cout << result.number;
         }
 
-        cout << endl;
-        //cout << "   " << (long)timer1.timeInMS() << " " << (long)timer2.timeInMS() << endl;
+        cout << "   TArytm: " << (long)timer1.timeInMS() << ", TBit: " << (long)timer2.timeInMS() << endl;
 
+//        Postać bitowa liczb
 //        printNumberAsBites(number1);
 //        printNumberAsBites(number2);
 //        printNumberAsBites(result);
@@ -356,8 +387,6 @@ void fileMode()
 
 int main(int argc, char **argv)
 {
-    cout << sizeof(long double) << endl;
-
     char option;
     do
     {
@@ -365,11 +394,11 @@ int main(int argc, char **argv)
         cout << "MENU" << endl;
         cout << endl;
         cout << "1 - tryb testow" << endl;
-        cout << "2 - tryb pliku" << endl;
+        cout << "2 - tryb pliku - dodawanie i odejmowanie" << endl;
+        cout << "3 - tryb pliku - mnożenie" << endl;
         cout << "0 - wyjscie" << endl;
 
         cin >> option;
-        //option = getchar();
         cout << endl;
 
         switch(option)
@@ -380,7 +409,11 @@ int main(int argc, char **argv)
                 break;
 
             case '2':
-                fileMode();
+                fileMode(false);
+                break;
+
+            case '3':
+                fileMode(true);
                 break;
         }
     }
@@ -389,39 +422,47 @@ int main(int argc, char **argv)
 
 TEST(LongDoubleAddTest, add)
 {
-    ASSERT_DOUBLE_EQ(6, calculate(2, 4));
-    ASSERT_DOUBLE_EQ(31, calculate(17, 14));
-    ASSERT_DOUBLE_EQ(120454.25, calculate(120086, 368.25));
-    ASSERT_DOUBLE_EQ(547.3694, calculate(478.368, 69.0014));
-    ASSERT_DOUBLE_EQ(37.0587, calculate(0.258, 36.8007));
-    ASSERT_DOUBLE_EQ(2.41406, calculate(0.04805, 2.36601));
-    ASSERT_DOUBLE_EQ(1432.239042, calculate(489.783242, 942.4558));
-    ASSERT_DOUBLE_EQ(1123941.55163, calculate(1100863.001, 23078.55063));
-    ASSERT_DOUBLE_EQ(3, calculate(1.153, 1.847));
-    ASSERT_DOUBLE_EQ(51432.8765, calculate(42687.54253, 8745.33397));
-    ASSERT_DOUBLE_EQ(200, calculate(100, 100));
-    ASSERT_DOUBLE_EQ(687522.425, calculate(5462.2465, 682060.1785));
-    ASSERT_DOUBLE_EQ(36.902416635, calculate(25.900017625, 11.00239901));
-    ASSERT_DOUBLE_EQ(0.120015009, calculate(0.020009, 0.100006009));
-    ASSERT_DOUBLE_EQ(142532474.9707104, calculate(99978309.7140552, 42554165.2566552));
+    ASSERT_DOUBLE_EQ(6, calculateAddOrSubtract(2, 4));
+    ASSERT_DOUBLE_EQ(31, calculateAddOrSubtract(17, 14));
+    ASSERT_DOUBLE_EQ(120454.25, calculateAddOrSubtract(120086, 368.25));
+    ASSERT_DOUBLE_EQ(547.3694, calculateAddOrSubtract(478.368, 69.0014));
+    ASSERT_DOUBLE_EQ(37.0587, calculateAddOrSubtract(0.258, 36.8007));
+    ASSERT_DOUBLE_EQ(2.41406, calculateAddOrSubtract(0.04805, 2.36601));
+    ASSERT_DOUBLE_EQ(1432.239042, calculateAddOrSubtract(489.783242, 942.4558));
+    ASSERT_DOUBLE_EQ(1123941.55163, calculateAddOrSubtract(1100863.001, 23078.55063));
+    ASSERT_DOUBLE_EQ(3, calculateAddOrSubtract(1.153, 1.847));
+    ASSERT_DOUBLE_EQ(51432.8765, calculateAddOrSubtract(42687.54253, 8745.33397));
+    ASSERT_DOUBLE_EQ(200, calculateAddOrSubtract(100, 100));
+    ASSERT_DOUBLE_EQ(687522.425, calculateAddOrSubtract(5462.2465, 682060.1785));
+    ASSERT_DOUBLE_EQ(36.902416635, calculateAddOrSubtract(25.900017625, 11.00239901));
+    ASSERT_DOUBLE_EQ(0.120015009, calculateAddOrSubtract(0.020009, 0.100006009));
+    ASSERT_DOUBLE_EQ(142532474.9707104, calculateAddOrSubtract(99978309.7140552, 42554165.2566552));
 }
 
 TEST(LongDoubleSubtractTest, sub)
 {
-    ASSERT_DOUBLE_EQ(423, calculate(-9, 432));
-    ASSERT_DOUBLE_EQ(50, calculate(60, -10));
-    ASSERT_DOUBLE_EQ(0, calculate(1900025.14, -1900025.14));
-    ASSERT_DOUBLE_EQ(-66944.71, calculate(-34799.48, -32145.23));
-    ASSERT_DOUBLE_EQ(-450, calculate(-150, -300));
-    ASSERT_DOUBLE_EQ(-37.0587, calculate(-0.258, -36.8007));
-    ASSERT_DOUBLE_EQ(-2.41406, calculate(-0.04805, -2.36601));
-    ASSERT_DOUBLE_EQ(-1432.239042, calculate(-489.783242, -942.4558));
-    ASSERT_DOUBLE_EQ(-0.00045, calculate(-0.00041, -0.00004));
-    ASSERT_DOUBLE_EQ(-54254.55, calculate(-5426.24, -48828.31));
-    ASSERT_DOUBLE_EQ(-200, calculate(-100, -100));
-    ASSERT_DOUBLE_EQ(-687522.425, calculate(-5462.2465, -682060.1785));
-    ASSERT_DOUBLE_EQ(-36.902416635, calculate(-25.900017625, -11.00239901));
-    ASSERT_DOUBLE_EQ(-0.120015009, calculate(-0.020009, -0.100006009));
-    ASSERT_DOUBLE_EQ(-142532474.9707104, calculate(-99978309.7140552, -42554165.2566552));
+    ASSERT_DOUBLE_EQ(423, calculateAddOrSubtract(-9, 432));
+    ASSERT_DOUBLE_EQ(50, calculateAddOrSubtract(60, -10));
+    ASSERT_DOUBLE_EQ(0, calculateAddOrSubtract(1900025.14, -1900025.14));
+    ASSERT_DOUBLE_EQ(-66944.71, calculateAddOrSubtract(-34799.48, -32145.23));
+    ASSERT_DOUBLE_EQ(-450, calculateAddOrSubtract(-150, -300));
+    ASSERT_DOUBLE_EQ(-37.0587, calculateAddOrSubtract(-0.258, -36.8007));
+    ASSERT_DOUBLE_EQ(-2.41406, calculateAddOrSubtract(-0.04805, -2.36601));
+    ASSERT_DOUBLE_EQ(-1432.239042, calculateAddOrSubtract(-489.783242, -942.4558));
+    ASSERT_DOUBLE_EQ(-0.00045, calculateAddOrSubtract(-0.00041, -0.00004));
+    ASSERT_DOUBLE_EQ(-54254.55, calculateAddOrSubtract(-5426.24, -48828.31));
+    ASSERT_DOUBLE_EQ(-200, calculateAddOrSubtract(-100, -100));
+    ASSERT_DOUBLE_EQ(-687522.425, calculateAddOrSubtract(-5462.2465, -682060.1785));
+    ASSERT_DOUBLE_EQ(-36.902416635, calculateAddOrSubtract(-25.900017625, -11.00239901));
+    ASSERT_DOUBLE_EQ(-0.120015009, calculateAddOrSubtract(-0.020009, -0.100006009));
+    ASSERT_DOUBLE_EQ(-142532474.9707104, calculateAddOrSubtract(-99978309.7140552, -42554165.2566552));
 }
 
+TEST(LongDoubleMultiplyTest, mul)
+{
+    ASSERT_DOUBLE_EQ(3888, calculateMultiply(9, 432));
+    ASSERT_DOUBLE_EQ(120, calculateMultiply(60, 2));
+    ASSERT_DOUBLE_EQ(-220, calculateMultiply(10, -22));
+    ASSERT_DOUBLE_EQ(45000, calculateMultiply(-150, -300));
+    ASSERT_DOUBLE_EQ(9.4945806, calculateMultiply(-0.258, -36.8007));
+}

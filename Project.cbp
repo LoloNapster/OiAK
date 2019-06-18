@@ -14,8 +14,8 @@
 				<Compiler>
 					<Add option="-std=c++11" />
 					<Add option="-g" />
-					<Add option="-std=gnu++11" />
 					<Add option="-pthread" />
+					<Add option="-std=gnu++11" />
 					<Add directory="include" />
 				</Compiler>
 				<Linker>
