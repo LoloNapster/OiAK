@@ -166,9 +166,12 @@ void addOrSubtract(float80* a, float80* b, float80* result) // parametry wejscio
         }
         else
         {
+            result_mantissa = result_mantissa << 1;
+
             while ((result_mantissa >> 63) == 0)
             {
                 result_mantissa = result_mantissa << 1;
+                result_exponent = result_exponent - 1;
             }
         }
     }
@@ -193,9 +196,12 @@ void addOrSubtract(float80* a, float80* b, float80* result) // parametry wejscio
         }
         else
         {
+            result_mantissa = result_mantissa << 1;
+
             while ((result_mantissa >> 63) == 0)
             {
                 result_mantissa = result_mantissa << 1;
+                result_exponent = result_exponent - 1;
             }
         }
     }
@@ -213,8 +219,8 @@ void multiply(float80* a, float80* b, float80* result)
 
     uint16_t a_exponent = a->parts.exponent - 16383;
     uint16_t b_exponent = b->parts.exponent - 16383;
-    uint64_t a_mantissa = a->parts.mantissa >> 1;
-    uint64_t b_mantissa = b->parts.mantissa >> 1;
+    uint64_t a_mantissa = a->parts.mantissa;
+    uint64_t b_mantissa = b->parts.mantissa;
 
     int16_t different_sign = a->parts.sign ^ b->parts.sign;
 
@@ -237,12 +243,6 @@ void multiply(float80* a, float80* b, float80* result)
     }
 
     result_mantissa = (uint64_t)(r_mantissa >> 64);
-
-    if ((result_mantissa >> 63) == 0)
-    {
-        result_mantissa = (uint64_t)(r_mantissa >> 63);
-        result_exponent = result_exponent - 1;
-    }
 
     result->parts.exponent = result_exponent;
     result->parts.mantissa = result_mantissa;
@@ -376,7 +376,7 @@ void fileMode(bool multiplication)
 
         cout << "   TArytm: " << (long)timer1.timeInMS() << ", TBit: " << (long)timer2.timeInMS() << endl;
 
-//        Postać bitowa liczb
+        //Postać bitowa liczb
 //        printNumberAsBites(number1);
 //        printNumberAsBites(number2);
 //        printNumberAsBites(result);
@@ -387,6 +387,8 @@ void fileMode(bool multiplication)
 
 int main(int argc, char **argv)
 {
+    cout << sizeof(long double) << endl;
+
     char option;
     do
     {
@@ -466,3 +468,4 @@ TEST(LongDoubleMultiplyTest, mul)
     ASSERT_DOUBLE_EQ(45000, calculateMultiply(-150, -300));
     ASSERT_DOUBLE_EQ(9.4945806, calculateMultiply(-0.258, -36.8007));
 }
+
